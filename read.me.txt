@@ -1,0 +1,20 @@
+1. Staging сервер на Next.js
+  - Создаём новый проект
+      npx create-next-app@latest
+
+  - Устанавливаем prettier
+      npm install --save-dev prettier eslint-config-prettier
+
+  - Добавляем в package.json скрипт для запуска prettier
+      "prettier" : "prettier -w ."
+
+  - В корень проека добавляем конфигурацию prettier
+       файл .prettierrc c содержимым {}
+
+  - Расширяем конфигурацию eslint для prettier
+       файл .eslintrc.json
+        {
+          "extends": ["next/core-web-vitals", "prettier"]
+        }
+  - Форматируем проект командой
+      npm run prettier
