@@ -24,7 +24,125 @@
   - Покупаем VPS и домен. (Желательно сразу под staging, и под production)
 
   - Подключаемся к серверу к пользователю root по паролю
-      ssh root@your_server_ip (ssh root@127.234.67.23)
+      ssh root@your_server_ip (ssh root@185.192.247.139)
 
   -Обновляем пакеты
       sudo apt update
+
+  - Создаём пользователя admin, и даем ему sudo права
+      adduser admin
+      usermod -aG sudo admin
+
+  -  Закрываем терминал с root  сессией и в новом терминале для admin Копируем свой публичный ключ на сервер
+      ssh-copy-id admin@185.192.247.159
+
+  - Проверяем наличие своего ключа в файле .ssh/authorized_keys
+      vim .ssh/authorized_keys
+
+  - Отключаем доступ к root пользователю и аутентификацию по паролю
+      sudo vim /etc/ssh/sshd_config
+        # Изменить строчки:
+        # PermitRootLogin no
+        # PasswordAuthentication no
+
+  - Перезапускаем ssh сервер
+      sudo systemctl restart ssh
+
+  - Генерируем пару ключей на сервере, что бы скачать репозиторий с кодом
+      ssh-keygen
+
+  - Выводим файл с публичным ключём, и добавляем в github deploy keys ( В репозитории settings → deploy keys)
+      cat ~/.ssh/id_rsa.pub
+
+  - Копируем репозиторий
+      git clone git@github.com:alexeyk500/vitrina_placeholder.git
+
+  - Устанавливаем nvm
+      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+      source ~/.bashrc
+
+  - Устанавливаем ноду
+      nvm install --lts
+        # проверить установку ноды
+        # node -v
+
+  - Переходим в папку скачанного проекта
+      cd vitrina_placeholder
+
+  - Устанавливаем зависимости в проекте, билдим проект и проверяем, что он запускается
+      npm ci
+      # Заполняем конфигурационный файл .env
+      # Если установлена Prisma то - npx prisma migrate dev / npx prisma db push
+      npm run build
+      npm start
+
+  - Запускаем приложение Next js как фоновый процес
+      npx pm2 start npm --name vitrina_placeholder -- start
+
+  - Настраиваем pm2 для запуска вместе с системой
+      npx pm2 startup
+      # Скопировать в консоли и выполнить команду, которую сгенерирует сервер
+      # sudo env PATH=$PATH:/home/admin/.nvm/versions/node/v20.10.0/bin /home/admin/.npm/_npx/5f7878ce38f1eb13/node_modules/pm2/bin/pm2 startup systemd -u admin --hp /home/admin
+
+  - Настраиваем фаервол, что бы он  допускал входящие подключения только по портам для ssh, http, https
+      sudo apt-get install ufw
+      sudo ufw status verbose
+      sudo ufw allow ssh
+      sudo ufw allow http
+      sudo ufw allow https
+      sudo ufw enable
+
+  - Устанавливаем nginx и проверяем что он запускается вместе с системой
+      sudo apt install nginx
+      sudo systemctl enable nginx
+      # Проверить запуск nginx
+      sudo systemctl is-enabled nginx
+
+  - Добавляем свой кастомный конфиг для nginx для нашего сайта
+        # папка с nginx - /etc/nginx
+        # дефолтная конфигурация nginx - /etc/nginx/nginx.conf
+        # папка с файлами кофигураций  - /etc/nginx/sites-available
+        # команда для открытия дефолтной конфигурации nginx - vim /etc/nginx/nginx.conf
+      sudo vim /etc/nginx/sites-available/staging.megavitrina.ru.conf
+        # вставляем конфигурацию
+        server {
+          server_name staging.megavitrina.ru;
+
+          location / {
+            include proxy_params;
+            proxy_pass http://127.0.0.1:3000;
+          }
+
+          listen 80;
+        }
+        # тестируем конфигурацию
+        sudo nginx -t
+
+  - Создаем линку на свой кастомный конфиг для нашего сайта
+      sudo ln -s /etc/nginx/sites-available/staging.megavitrina.ru.conf /etc/nginx/sites-enabled/
+
+  - Перезапускаем nginx
+      sudo nginx -s reload
+
+  - Настройка https
+    # Устанавливаем certbot и python3-certbot-nginx: для автоматической настройки nginx
+    sudo apt install certbot python3-certbot-nginx
+    # Запускаем certbot для нашего домена
+    sudo certbot --nginx -d staging.megavitrina.ru
+    # Проверить планировщик обновлений
+    sudo systemctl status certbot.timer
+    # Проверить обновление
+    sudo certbot renew --dry-run
+
+  - Перезапуск менеджера процессов pm2
+    npx pm2 reload all
+    # список процессов pm2 - npx pm2 list
+    # остановить все процессы pm2 - npx pm2 stop all
+    # удалить приложение pm2 delete app
+
+
+
+
+- Публичные ключи от ноута и рабочего компа:
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7j4bcOyPw5YGJa7Ymm2bPEPY5Ph6Q4W5V9YhylZy9GhP1fqviil7HIq4Smut68ENrMvwh5joWb2PPcMMU4PtHwdfM5846QBcrybNKPtoJNkQD8gRwtt/FXI6vGnfbFYm2bPt8cwYvtXa44pEVsonnf6QDDj4tFhmsPijVZe3Vf9TvaqwX4b0dZvrDnVgzrCCsYTf5R5nLd7J8hv1v7qbh86Ze9KjPJjqbSWYBPx8ghvkaHEnEs5qpGsH3rsMXh/OchJ59U+E4VxaRKzCS+bDBwEWyUshM6YgatyS9advkW32qCBqA3IJruoGYed2k6xX9aqh525iU3QP9m4CrOGU5YXgbHk8J2gS1Q8EiOh/T9UYHkzY/NONekJ85ciVJyU+ijVPjbotzS0iFt2NlBsTb6JZwtNCH8lvrefRUljvXxGA58kl9p4mflcJlN2NJXiOpRRb5ae2iJszSLYIOKmRcdqYDc/QDVpGWKgYxCtknHIkO1AoegjNZpRuCRnLlTB8= alexeyk500@MacBook-Pro-Aleksej.local
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDV55gGoefTUNSxVjT6hxgNoV1tGzFjSI6C8Rxu9I/oYd4TtJ8iJQLA/6U2049em+vp6NisjoaX5GiXt3a/88s+iDfjc45d8dmfiMepTL3jACSXqk9RHnlwcoRJWzsNH1COgbI5+awjQ5C4HqmSSEif8/u5rezh6LlUrcZ9McPllmN6DkoOTz/0usu3YxozhuRb5gcBO0yP3Fou2a5KYILlWpLD7dVimSddt8MfCKGwgSH7M0po4e1aRCS1ntR467xptdkOUg8gD5e9rJBDtgzyYhA17FBnrunmK45s8K606NnmoH2/XbCHbBnQRsozztnsEUYUxpP0pWfP5ztNcMQ597JxiBsQ30ITjrvWUaZKk3l9JbzCQN19j/b2GgBZBYPDBJKBmV7UQxNYlbtJ3eJWsuArXfrOnAF9GIeAdozRnK7JlGz/XAw/X6edRed7uktb9l6khYW4W7T3+qKWrhdZj2cGwhTV8atXw6qrjT61Cd17MMdYKFdiOiZ1Qc52g6s= alexeyk500@iMac
